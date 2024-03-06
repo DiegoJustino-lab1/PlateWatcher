@@ -2,6 +2,7 @@
 import cv2
 import pytesseract
 import numpy as np
+import re
 
 pytesseract.pytesseract.tesseract_cmd = r"C:\\Program Files\\Tesseract-OCR\\Tesseract.exe"
 
@@ -46,7 +47,8 @@ with open("dados.csv", "a") as arquivo:
                     # Processa a região da placa com o Tesseract
                     resultado = pytesseract.image_to_string(plate)
 
-                    if resultado != "":
+                    # Verifica se o resultado corresponde ao padrão
+                    if re.match(r'^[A-Za-z]{3}-\d{4}$', resultado) or re.match(r'^[A-Za-z]{3}[A-Za-z]\d{2}$', resultado):
                         print("Texto detectado:")
                         print(resultado)
 
