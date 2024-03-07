@@ -48,7 +48,7 @@ with open("dados.csv", "a") as arquivo:
                     resultado = pytesseract.image_to_string(plate)
 
                     # Verifica se o resultado corresponde ao padrão
-                    if re.match(r'^[A-Za-z]{3}-\d{4}$', resultado) or re.match(r'^[A-Za-z]{3}[A-Za-z]\d{2}$', resultado):
+                    if re.match(r'^[A-Za-z]{3}-\d{4}$', resultado) or re.match(r'^[A-Za-z]{3}\d{1}[A-Za-z]{1}\d{2}$', resultado):
                         print("Texto detectado:")
                         print(resultado)
 
