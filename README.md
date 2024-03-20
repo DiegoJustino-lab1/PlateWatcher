@@ -1,4 +1,4 @@
-Antes, faca o download neste sitio:
+Antes, faca o download neste site:
 
 https://github.com/UB-Mannheim/tesseract/wiki
 
