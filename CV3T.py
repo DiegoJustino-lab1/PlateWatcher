@@ -43,7 +43,7 @@ with open("dados.csv", "a") as arquivo:
             for contour in contours:
                 # Aproxima o contorno
                 perimeter = cv2.arcLength(contour, True)
-                approx = cv2.approxPolyDP(contour, 0.018 * perimeter, True)
+                approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
 
                 # Se o contorno tem 4 vértices, assumimos que encontramos a placa
                 if len(approx) == 4:
@@ -55,7 +55,7 @@ with open("dados.csv", "a") as arquivo:
                     resultado = pytesseract.image_to_string(plate)
 
                     # Verifica se o resultado corresponde ao padrão
-                    if re.match(r'^[A-Za-z]{3}-\d{4}$', resultado) or re.match(r'^[A-Za-z]{3}\d{1}[A-Za-z]{1}\d{2}$', resultado):
+                    if re.match(r'^[A-Za-z]{3}-\d{4}$', resultado) or re.match(r'^[A-Za-z]{3}\d{1}[A-Za-z]{1}\d{2}$', resultado) or re.match(r'^[A-Za-z]{3}\s\d{1}[A-Za-z]{1}\d{2}$', resultado) or re.match(r'^[A-Za-z]{3}\s\d{4}$', resultado):
                         print("Texto detectado:")
                         print(resultado)
 
