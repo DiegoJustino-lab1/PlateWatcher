@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reconhecimento de Placas</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        .video-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        img {
+            width: 80%;
+            border: 2px solid #333;
+            border-radius: 10px;
+        }
+
+        .popup {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h1>Reconhecimento de Placas</h1>
+    <div class="video-container">
+        <h3>Feed de Vídeo</h3>
+        <img src="/video_feed" alt="Feed de Vídeo">
+    </div>
+    <div id="popup" class="popup"></div>
+
+    <script>
+        let lastPlate = null;
+
+        // Função para verificar a última placa detectada
+        async function checkLastPlate() {
+            const response = await fetch('/last_plate');
+            const data = await response.json();
+
+            if (data.plate && data.plate !== lastPlate) {
+                lastPlate = data.plate;
+                showPopup(`Placa detectada: ${lastPlate}`);
+            }
+        }
+
+        // Função para exibir o popup
+        function showPopup(message) {
+            const popup = document.getElementById('popup');
+            popup.innerText = message;
+            popup.style.display = 'block';
+
+            // Oculta o popup após 3 segundos
+            setTimeout(() => {
+                popup.style.display = 'none';
+            }, 3000);
+        }
+
+        // Verifica a última placa detectada a cada 1 segundo
+        setInterval(checkLastPlate, 1000);
+    </script>
+</body>
+</html>
