@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,32 +13,30 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            height: 100vh;
+            justify-content: flex-start;
+            min-height: 100vh;
         }
-
         h1 {
             color: #333;
-            margin-bottom: 20px;
+            margin: 20px 0;
         }
-
         .video-container {
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             background-color: #fff;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        img {
+            margin-bottom: 30px;
             width: 80%;
+            max-width: 600px;
+        }
+        .video-container img {
+            width: 100%;
             border: 2px solid #333;
             border-radius: 10px;
         }
-
         .popup {
             position: fixed;
             top: 20px;
@@ -50,45 +48,122 @@
             border-radius: 5px;
             box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
             display: none;
+            z-index: 1000;
+        }
+        .plates-table-container {
+            width: 80%;
+            max-width: 800px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            margin-bottom: 40px;
+        }
+        .plates-table-container h3 {
+            margin-top: 0;
+        }
+        #plates-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        #plates-table th, #plates-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        #plates-table th {
+            background-color: #f2f2f2;
+        }
+        #plates-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        #plates-table tr:hover {
+            background-color: #f1f1f1;
+        }
+        #plates-table button {
+            margin-bottom: 10px;
         }
     </style>
 </head>
 <body>
     <h1>Reconhecimento de Placas</h1>
+
+    <!-- Container do vídeo -->
     <div class="video-container">
         <h3>Feed de Vídeo</h3>
         <img src="/video_feed" alt="Feed de Vídeo">
     </div>
+
+    <!-- Popup de aviso de placa nova -->
     <div id="popup" class="popup"></div>
+
+    <!-- Tabela de placas detectadas -->
+    <div class="plates-table-container">
+        <h3>Placas Detectadas</h3>
+        <button onclick="fetchPlates()">Atualizar Lista</button>
+        <table id="plates-table">
+            <thead>
+                <tr>
+                    <th>Placa</th>
+                    <th>Data/Hora</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Linhas serão inseridas aqui -->
+            </tbody>
+        </table>
+    </div>
 
     <script>
         let lastPlate = null;
-
-        // Função para verificar a última placa detectada
-        async function checkLastPlate() {
-            const response = await fetch('/last_plate');
-            const data = await response.json();
-
-            if (data.plate && data.plate !== lastPlate) {
-                lastPlate = data.plate;
-                showPopup(`Placa detectada: ${lastPlate}`);
-            }
-        }
 
         // Função para exibir o popup
         function showPopup(message) {
             const popup = document.getElementById('popup');
             popup.innerText = message;
             popup.style.display = 'block';
-
-            // Oculta o popup após 3 segundos
-            setTimeout(() => {
-                popup.style.display = 'none';
-            }, 3000);
+            setTimeout(() => popup.style.display = 'none', 3000);
         }
 
-        // Verifica a última placa detectada a cada 1 segundo
-        setInterval(checkLastPlate, 1000);
+        // Busca a última placa detectada e exibe popup se for nova
+        async function checkLastPlate() {
+            try {
+                const res = await fetch('/last_plate');
+                const data = await res.json();
+                if (data.plate && data.plate !== lastPlate) {
+                    lastPlate = data.plate;
+                    showPopup(`Placa detectada: ${lastPlate}`);
+                    fetchPlates();  // atualiza tabela automaticamente
+                }
+            } catch (err) {
+                console.error('Erro ao checar última placa:', err);
+            }
+        }
+
+        // Busca todas as placas e preenche a tabela
+        async function fetchPlates() {
+            try {
+                const res = await fetch('/get_all_plates');
+                const plates = await res.json();
+                const tbody = document.querySelector('#plates-table tbody');
+                tbody.innerHTML = '';
+                plates.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<td>${item.placa}</td><td>${item.data_hora}</td>`;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error('Erro ao buscar placas:', err);
+            }
+        }
+
+        // Ao carregar a página, já popula a tabela
+        window.addEventListener('load', () => {
+            fetchPlates();
+            // Verifica placa nova a cada segundo
+            setInterval(checkLastPlate, 1000);
+        });
     </script>
 </body>
 </html>
