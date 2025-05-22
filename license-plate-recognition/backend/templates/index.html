@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Reconhecimento de Placas - Portaria</title>
   <style>
+    /* Seu CSS (mantido como no original, mas lembre-se que a tabela pode precisar de ajustes se as colunas mudarem muito) */
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
 
     body {
@@ -66,7 +67,7 @@
       top: 20px;
       left: 50%;
       transform: translateX(-50%);
-      background-color: #27ae60;
+      background-color: #27ae60; /* Cor padrão para detecção normal */
       color: #ecf0f1;
       padding: 14px 30px;
       border-radius: 30px;
@@ -85,7 +86,7 @@
       padding: 24px 28px;
       border-radius: 8px;
       width: 90%;
-      max-width: 900px;
+      max-width: 900px; /* Ajuste conforme necessário para novas colunas */
       box-shadow: 0 0 18px #1a252fbb;
       margin-bottom: 48px;
       user-select: text;
@@ -126,7 +127,7 @@
       width: 100%;
       border-collapse: collapse;
       color: #ecf0f1;
-      font-size: 1rem;
+      font-size: 1rem; /* Pode precisar ajustar o tamanho da fonte */
       letter-spacing: 0.025em;
     }
 
@@ -138,7 +139,7 @@
     }
 
     #plates-table th, #plates-table td {
-      padding: 14px 16px;
+      padding: 12px 10px; /* Ajuste o padding se necessário */
       border: 1px solid #16a085cc;
       text-align: center;
     }
@@ -170,67 +171,210 @@
     <button onclick="fetchPlates()" aria-label="Atualizar lista de placas detectadas">Atualizar Lista</button>
     <table id="plates-table" aria-describedby="platesTableDesc" aria-live="polite" aria-relevant="all">
       <caption id="platesTableDesc" style="text-align:left; padding-bottom:8px; font-weight: 400; font-size:0.9rem; color:#b2becd;">
-        Tabela contendo as placas detectadas com as respectivas datas e horas de reconhecimento.
+        Tabela contendo as placas detectadas com status de estacionamento.
       </caption>
       <thead>
         <tr>
           <th>Placa</th>
-          <th>Data/Hora</th>
+          <th>Status</th>
+          <th>Horário de Referência</th>
+          <th>Detalhes Tempo</th>
         </tr>
       </thead>
       <tbody>
-        <!-- Conteúdo inserido dinamicamente -->
-      </tbody>
+        </tbody>
     </table>
   </div>
 
 <script>
-  let lastPlate = null;
+  let lastPlate = null; // Armazena a string da última placa vinda do endpoint /last_plate
+  let plateInfo = {}; // Armazena informações persistentes por placa, ex: { "ABC-1234": { fineNotifiedThisSession: false } }
+  let activeTimers = []; // Armazena IDs dos setIntervals para poder limpá-los
 
+  const FIVE_HOURS_IN_MS = 5 * 60 * 60 * 1000;
+
+  // Função para converter string "YYYY-MM-DD HH:MM:SS" para objeto Date
+  function parseDateTime(dateTimeStr) {
+    const [datePart, timePart] = dateTimeStr.split(' ');
+    const [year, month, day] = datePart.split('-');
+    const [hours, minutes, seconds] = timePart.split(':');
+    return new Date(year, month - 1, day, hours, minutes, seconds); // Mês é 0-indexado
+  }
+
+  // Função para formatar duração em milissegundos para HH:MM:SS
+  function formatDuration(ms) {
+    if (ms < 0) ms = 0;
+    let seconds = Math.floor((ms / 1000) % 60);
+    let minutes = Math.floor((ms / (1000 * 60)) % 60);
+    let hours = Math.floor(ms / (1000 * 60 * 60)); // Total de horas
+
+    hours = (hours < 10) ? "0" + hours : hours;
+    minutes = (minutes < 10) ? "0" + minutes : minutes;
+    seconds = (seconds < 10) ? "0" + seconds : seconds;
+    return `${hours}:${minutes}:${seconds}`;
+  }
+
+  // Popup para detecção normal de placa
   function showPopup(message) {
     const popup = document.getElementById('popup');
     popup.innerText = message;
+    popup.style.backgroundColor = '#27ae60'; // Verde
     popup.style.display = 'block';
     setTimeout(() => {
       popup.style.display = 'none';
     }, 3000);
   }
 
+  // Popup para multa
+  function showFinePopup(plate) {
+    const popup = document.getElementById('popup');
+    popup.innerText = `Placa ${plate}: pagar multa de R$50,00 por exceder 5h.`;
+    popup.style.backgroundColor = '#e74c3c'; // Vermelho
+    popup.style.display = 'block';
+    setTimeout(() => {
+      popup.style.display = 'none';
+      popup.style.backgroundColor = '#27ae60'; // Reset para cor padrão do popup
+    }, 7000); // Mostrar por mais tempo
+  }
+
+  async function fetchPlates() {
+    try {
+      const res = await fetch('/get_all_plates');
+      const platesFromServer = await res.json();
+
+      const processedPlateData = {};
+      for (const detection of platesFromServer) {
+        if (!processedPlateData[detection.placa]) {
+          processedPlateData[detection.placa] = {
+            placa: detection.placa,
+            history: []
+          };
+        }
+        processedPlateData[detection.placa].history.push(parseDateTime(detection.data_hora));
+      }
+
+      for (const pId in processedPlateData) {
+        processedPlateData[pId].history.sort((a, b) => a - b);
+      }
+
+      activeTimers.forEach(timerId => clearInterval(timerId));
+      activeTimers = [];
+      const tbody = document.querySelector('#plates-table tbody');
+      tbody.innerHTML = '';
+
+      for (const pId in processedPlateData) {
+        const plateData = processedPlateData[pId];
+        const history = plateData.history;
+        const appearances = history.length;
+
+        if (!plateInfo[pId]) {
+          plateInfo[pId] = { fineNotifiedThisSession: false };
+        }
+        const currentPersistentInfo = plateInfo[pId];
+
+        const tr = document.createElement('tr');
+
+        // CORREÇÃO: Criar células na ordem correta do cabeçalho
+        let plateCell = tr.insertCell();          // Coluna 1: Placa
+        let statusCell = tr.insertCell();         // Coluna 2: Status
+        let referenceTimeCell = tr.insertCell();  // Coluna 3: Horário de Referência
+        let timeDetailCell = tr.insertCell();     // Coluna 4: Detalhes Tempo
+
+        plateCell.textContent = pId; // Define o conteúdo da célula da placa
+
+        let statusText = '';
+        let referenceTimeStr = '';
+
+        if (appearances % 2 !== 0) { // Carro está ESTACIONADO
+          statusText = 'Estacionado';
+          const currentEntryTime = history[appearances - 1];
+          referenceTimeStr = currentEntryTime.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
+
+          function updateParkedCarDisplay() {
+            const now = new Date();
+            const parkedDurationMs = now - currentEntryTime;
+            const remainingTimeMs = FIVE_HOURS_IN_MS - parkedDurationMs;
+
+            if (parkedDurationMs >= FIVE_HOURS_IN_MS) {
+              timeDetailCell.textContent = `TEMPO EXCEDIDO (${formatDuration(parkedDurationMs)})`;
+              timeDetailCell.style.color = 'red';
+              if (!currentPersistentInfo.fineNotifiedThisSession) {
+                showFinePopup(pId);
+                currentPersistentInfo.fineNotifiedThisSession = true;
+              }
+            } else {
+              timeDetailCell.textContent = `Restante: ${formatDuration(remainingTimeMs)}`;
+              timeDetailCell.style.color = '';
+            }
+          }
+          updateParkedCarDisplay();
+          activeTimers.push(setInterval(updateParkedCarDisplay, 1000));
+
+        } else { // Carro SAIU
+          statusText = 'Saiu';
+          currentPersistentInfo.fineNotifiedThisSession = false;
+
+          if (appearances >= 2) {
+            const lastExitTime = history[appearances - 1];
+            const correspondingEntryTime = history[appearances - 2];
+            const parkedDurationMs = lastExitTime - correspondingEntryTime;
+
+            referenceTimeStr = `Entrada: ${correspondingEntryTime.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' })} | Saída: ${lastExitTime.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' })}`;
+            timeDetailCell.textContent = `Permaneceu por: ${formatDuration(parkedDurationMs)}`;
+          } else {
+            referenceTimeStr = 'N/A';
+            timeDetailCell.textContent = 'Dados insuficientes';
+          }
+        }
+        
+        // Definir o conteúdo das células de status e horário de referência
+        statusCell.textContent = statusText;
+        referenceTimeCell.textContent = referenceTimeStr;
+        
+        tbody.appendChild(tr);
+      }
+
+    } catch (err) {
+      console.error('Erro ao buscar ou processar placas:', err);
+      const tbody = document.querySelector('#plates-table tbody');
+      tbody.innerHTML = `<tr><td colspan="4" style="color:red; text-align:center;">Erro ao carregar dados das placas.</td></tr>`;
+    }
+  }
+
   async function checkLastPlate() {
     try {
       const res = await fetch('/last_plate');
-      const data = await res.json();
+      const data = await res.json(); // Espera-se { plate: "PLACA_XYZ" }
+      
+      // Se uma placa foi retornada E é diferente da última placa que causou um popup
       if (data.plate && data.plate !== lastPlate) {
-        lastPlate = data.plate;
-        showPopup(`Placa detectada: ${lastPlate}`);
-        fetchPlates();
+        const newlyDetectedPlateValue = data.plate;
+        lastPlate = newlyDetectedPlateValue; // Atualiza a referência da última placa detectada
+        showPopup(`Nova placa detectada: ${newlyDetectedPlateValue}`); // Mostra popup genérico
+        await fetchPlates(); // Atualiza toda a tabela com a nova informação
       }
     } catch (err) {
       console.error('Erro ao checar última placa:', err);
     }
   }
 
-  async function fetchPlates() {
-    try {
-      const res = await fetch('/get_all_plates');
-      const plates = await res.json();
-      const tbody = document.querySelector('#plates-table tbody');
-      tbody.innerHTML = '';
-      plates.forEach(item => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${item.placa}</td><td>${item.data_hora}</td>`;
-        tbody.appendChild(tr);
-      });
-    } catch (err) {
-      console.error('Erro ao buscar placas:', err);
-    }
-  }
+  window.addEventListener('load', async () => {
+    await fetchPlates(); // Carrega e processa todas as placas na inicialização
 
-  window.addEventListener('load', () => {
-    fetchPlates();
-    setInterval(checkLastPlate, 1000);
+    // Inicializa `lastPlate` com a placa mais recente do backend
+    // para evitar que o primeiro `checkLastPlate` dispare um popup para ela.
+    try {
+      const initialPlateRes = await fetch('/last_plate');
+      const initialPlateData = await initialPlateRes.json();
+      if (initialPlateData.plate) {
+        lastPlate = initialPlateData.plate;
+      }
+    } catch (err) {
+      console.error('Erro ao inicializar a última placa:', err);
+    }
+
+    setInterval(checkLastPlate, 1000); // Começa a verificar por novas placas a cada segundo
   });
 </script>
 </body>
 </html>
-

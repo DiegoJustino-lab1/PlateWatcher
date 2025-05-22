@@ -5,6 +5,7 @@ from CV3T import recognize_plate
 import time
 from pymongo import MongoClient
 from concurrent.futures import ThreadPoolExecutor
+import threading
 
 app = Flask(__name__)
 camera = cv2.VideoCapture(0)
@@ -59,6 +60,7 @@ def generate_frames():
         if plate and plate != last_plate:
             last_plate = plate
             save_plate_to_db_async(plate)
+            registrar_entrada_ou_saida(plate)
             cv2.putText(
                 frame,
                 f"Placa: {plate}",
@@ -74,6 +76,40 @@ def generate_frames():
         yield (b'--frame\r\n'
                b'Content-Type: image/jpeg\r\n\r\n' + buf.tobytes() + b'\r\n')
         time.sleep(0.03)
+
+
+
+
+# Dicionário para armazenar o tempo de entrada de cada placa
+placas_em_monitoramento = {}  # {placa: tempo_entrada}
+placas_tempos = []  # Lista de registros: [{'placa': ..., 'entrada': ..., 'saida': ..., 'tempo_total': ...}]
+
+lock = threading.Lock()  # Para evitar condições de corrida
+
+def registrar_entrada_ou_saida(placa):
+    now = time.time()
+    with lock:
+        if placa not in placas_em_monitoramento:
+            # Nova placa detectada, registra entrada
+            placas_em_monitoramento[placa] = now
+        else:
+            # Placa já estava, registra saída e calcula tempo
+            entrada = placas_em_monitoramento.pop(placa)
+            tempo_total = now - entrada
+            placas_tempos.append({
+                'placa': placa,
+                'entrada': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(entrada)),
+                'saida': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now)),
+                'tempo_total_segundos': round(tempo_total, 2)
+            })
+
+# Para consultar os tempos pelo Flask:
+@app.route('/placas_tempos')
+def get_placas_tempos():
+    with lock:
+        return jsonify(placas_tempos)
+    
+
 
 @app.route('/video_feed')
 def video_feed():
@@ -91,6 +127,9 @@ def get_all_plates():
 
 if __name__ == '__main__':
     app.run(debug=False)
+
+
+
 
 
 
