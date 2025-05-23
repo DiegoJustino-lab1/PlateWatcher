@@ -1,4 +1,4 @@
-# Reconhecimento Automatizado de Placas de Automóveis com Python
+# Reconhecimento Automatizado de Placas de Automóveis e Motocicletas com Python
 
 Este projeto realiza o reconhecimento automatizado de placas de veículos utilizando Python, OpenCV e Tesseract OCR. As placas detectadas são salvas em um banco de dados MongoDB para consulta posterior.
 
